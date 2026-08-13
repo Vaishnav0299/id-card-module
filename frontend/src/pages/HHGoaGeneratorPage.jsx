@@ -1,5 +1,6 @@
 import React, { useState, useRef, useCallback } from 'react';
 import { toPng, toJpeg } from 'html-to-image';
+import { jsPDF } from 'jspdf';
 import { BuilderPassCard } from '../components/BuilderPassCard';
 
 const TITLES = [
@@ -28,6 +29,22 @@ function readFileAsDataURL(file) {
   });
 }
 
+/**
+ * Generates a deterministic Team Serial ID for a given Team Name.
+ * Teammates with the same Team Name get the exact same Team Serial ID.
+ */
+function generateTeamSerialId(str) {
+  if (!str || !str.trim()) return 'HHG-709';
+  const cleanStr = str.trim().toLowerCase();
+  let hash = 0;
+  for (let i = 0; i < cleanStr.length; i++) {
+    hash = (hash << 5) - hash + cleanStr.charCodeAt(i);
+    hash |= 0;
+  }
+  const serialNum = (Math.abs(hash) % 900) + 100;
+  return `HHG-${serialNum}`;
+}
+
 const PASS_TYPES = ['BUILDER PASS', 'VIP PASS', 'HACKER PASS', 'MENTOR PASS'];
 
 export default function HHGoaGeneratorPage() {
@@ -35,7 +52,7 @@ export default function HHGoaGeneratorPage() {
   const [name, setName] = useState('deva bokare');
   const [craft, setCraft] = useState('Full stack developer & UI/UX Designer');
   const [teamName, setTeamName] = useState('Wave Hackers');
-  const [teamId, setTeamId] = useState('HHG-709');
+  const [teamId, setTeamId] = useState(() => generateTeamSerialId('Wave Hackers'));
   const [passType, setPassType] = useState('BUILDER PASS');
   const [assignedTitle, setAssignedTitle] = useState('Vector Architect');
 
@@ -44,12 +61,25 @@ export default function HHGoaGeneratorPage() {
   const [offsetX, setOffsetX] = useState(0);
   const [offsetY, setOffsetY] = useState(0);
 
+  // Video Background State
+  const [isVideoPlaying, setIsVideoPlaying] = useState(true);
+
   const [isDownloading, setIsDownloading] = useState(false);
   const [copied, setCopied] = useState(false);
   const [error, setError] = useState('');
 
   const passRef = useRef(null);
   const fileInputRef = useRef(null);
+  const videoRef = useRef(null);
+
+  // Auto-generate Team Serial ID when Team Name changes
+  const handleTeamNameChange = (e) => {
+    const val = e.target.value;
+    setTeamName(val);
+    if (val.trim()) {
+      setTeamId(generateTeamSerialId(val));
+    }
+  };
 
   // Random Pass Code
   const [passCode] = useState(() => {
@@ -60,6 +90,17 @@ export default function HHGoaGeneratorPage() {
   const handleRandomTeamId = () => {
     const num = Math.floor(100 + Math.random() * 900);
     setTeamId(`HHG-${num}`);
+  };
+
+  const toggleVideoPlayback = () => {
+    if (videoRef.current) {
+      if (isVideoPlaying) {
+        videoRef.current.pause();
+      } else {
+        videoRef.current.play();
+      }
+      setIsVideoPlaying(!isVideoPlaying);
+    }
   };
 
   // ── Photo Upload Handler ──────────────────────────────────────────────────
@@ -106,7 +147,7 @@ export default function HHGoaGeneratorPage() {
     setOffsetY(0);
   };
 
-  // ── Export Download (PNG / JPEG) ──────────────────────────────────────────
+  // ── Export Download (PDF ID / PNG / JPG) ──────────────────────────────────
   const handleDownload = useCallback(async (format = 'png') => {
     if (!passRef.current || isDownloading) return;
     setIsDownloading(true);
@@ -117,15 +158,30 @@ export default function HHGoaGeneratorPage() {
         backgroundColor: '#0a141b',
       };
 
-      const dataUrl = format === 'jpeg' || format === 'jpg'
-        ? await toJpeg(passRef.current, { ...exportOptions, quality: 0.95 })
-        : await toPng(passRef.current, exportOptions);
+      const sanitizedName = (name || 'Builder').trim().replace(/\s+/g, '-');
 
-      const fileName = `FrameInGoa-Pass-${(name || 'Builder').replace(/\s+/g, '-')}.${format}`;
-      const link = document.createElement('a');
-      link.download = fileName;
-      link.href = dataUrl;
-      link.click();
+      if (format === 'pdf') {
+        const dataUrl = await toPng(passRef.current, exportOptions);
+        const pdf = new jsPDF({
+          orientation: 'landscape',
+          unit: 'px',
+          format: [900, 540],
+        });
+        pdf.addImage(dataUrl, 'PNG', 0, 0, 900, 540);
+        pdf.save(`FrameInGoa-ID-Pass-${sanitizedName}.pdf`);
+      } else if (format === 'jpeg' || format === 'jpg') {
+        const dataUrl = await toJpeg(passRef.current, { ...exportOptions, quality: 0.96 });
+        const link = document.createElement('a');
+        link.download = `FrameInGoa-ID-Pass-${sanitizedName}.jpg`;
+        link.href = dataUrl;
+        link.click();
+      } else {
+        const dataUrl = await toPng(passRef.current, exportOptions);
+        const link = document.createElement('a');
+        link.download = `FrameInGoa-ID-Pass-${sanitizedName}.png`;
+        link.href = dataUrl;
+        link.click();
+      }
     } catch (err) {
       console.error('Export error:', err);
       setError(`Failed to export ${format.toUpperCase()}. Please try again.`);
@@ -134,28 +190,109 @@ export default function HHGoaGeneratorPage() {
     }
   }, [isDownloading, name]);
 
-  // ── Share to X ────────────────────────────────────────────────────────────
+  // Social Post Generator & Share Modal State
+  const [showShareModal, setShowShareModal] = useState(false);
+  const [shareImageDataUrl, setShareImageDataUrl] = useState('');
+  const [postMessage, setPostMessage] = useState('');
+  const [modalToast, setModalToast] = useState('');
+
+  // ── Open Share Modal with Customized Short Post & Image ──────────────────
+  const openShareModal = useCallback(async () => {
+    if (!passRef.current) return;
+    try {
+      const dataUrl = await toPng(passRef.current, { pixelRatio: 3, cacheBust: true, backgroundColor: '#0a141b' });
+      setShareImageDataUrl(dataUrl);
+
+      const defaultMessage = `Heading to Hacker House Goa 2026 as a ${craft || 'Builder'}! 🌴🚀\nBuilding with ${teamName || 'team'} in paradise. 🌊\n\nCheck out my official Builder Pass!\n\n#FrameInGoa #HHGoa2026 #HackerHouseGoa #LiftUpLabs #BuildInParadise`;
+      setPostMessage(defaultMessage);
+      setModalToast('');
+      setShowShareModal(true);
+    } catch (err) {
+      console.error('Share modal capture error:', err);
+      setError('Could not generate share preview. Please try again.');
+    }
+  }, [craft, teamName]);
+
+  // ── Share to X with Pass Image & Post Text ────────────────────────────────
   const handleShareX = useCallback(async () => {
+    const text = postMessage || `Heading to Hacker House Goa 2026 as a ${craft || 'Builder'}! 🌴🚀\n\n#FrameInGoa #HHGoa2026 #HackerHouseGoa #LiftUpLabs`;
+
+    // Try Web Share API with File Attachment
     if (passRef.current && navigator.share && navigator.canShare) {
       try {
-        const dataUrl = await toPng(passRef.current, { pixelRatio: 2, cacheBust: true, backgroundColor: '#0a141b' });
+        const dataUrl = shareImageDataUrl || await toPng(passRef.current, { pixelRatio: 3, cacheBust: true, backgroundColor: '#0a141b' });
         const blob = await (await fetch(dataUrl)).blob();
-        const file = new File([blob], 'frame-in-goa-pass.png', { type: 'image/png' });
+        const file = new File([blob], `FrameInGoa-Pass-${(name || 'Builder').replace(/\s+/g, '-')}.png`, { type: 'image/png' });
         if (navigator.canShare({ files: [file] })) {
           await navigator.share({
+            title: 'Hacker House Goa 2026 Builder Pass',
+            text: text,
             files: [file],
-            text: `Heading to Hacker House Goa 2026 as a builder! 🌴 #FrameInGoa`,
           });
           return;
         }
-      } catch {
-        // Fall back to Twitter intent
+      } catch (err) {
+        console.log('Web share fallback triggered:', err);
       }
     }
 
-    const text = encodeURIComponent(`Heading to Hacker House Goa 2026 as a builder! 🌴 #FrameInGoa`);
-    window.open(`https://twitter.com/intent/tweet?text=${text}`, '_blank', 'noopener');
-  }, []);
+    // Desktop Fallback: Copy Post Text + Download Image + Open X
+    try {
+      await navigator.clipboard.writeText(text);
+      setModalToast('Post text copied & pass image downloaded! Paste text & attach image on X.');
+    } catch {
+      // Ignore clipboard error
+    }
+
+    // Trigger Image Download for Attachment
+    if (shareImageDataUrl || passRef.current) {
+      const link = document.createElement('a');
+      link.download = `FrameInGoa-Pass-${(name || 'Builder').replace(/\s+/g, '-')}.png`;
+      link.href = shareImageDataUrl || await toPng(passRef.current, { pixelRatio: 3, cacheBust: true, backgroundColor: '#0a141b' });
+      link.click();
+    }
+
+    window.open(`https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}`, '_blank', 'noopener,noreferrer');
+  }, [postMessage, craft, shareImageDataUrl, name]);
+
+  // ── Share to LinkedIn with Pass Image & Post Text ─────────────────────────
+  const handleShareLinkedIn = useCallback(async () => {
+    const text = postMessage || `Heading to Hacker House Goa 2026 as a ${craft || 'Builder'}! 🌴🚀\n\n#FrameInGoa #HHGoa2026 #HackerHouseGoa #LiftUpLabs`;
+
+    // Copy Post Text to Clipboard
+    try {
+      await navigator.clipboard.writeText(text);
+      setModalToast('Post text copied & pass image downloaded! Paste text & attach image on LinkedIn.');
+    } catch {
+      // Ignore clipboard error
+    }
+
+    // Trigger Image Download for Attachment
+    if (shareImageDataUrl || passRef.current) {
+      const link = document.createElement('a');
+      link.download = `FrameInGoa-Pass-${(name || 'Builder').replace(/\s+/g, '-')}.png`;
+      link.href = shareImageDataUrl || await toPng(passRef.current, { pixelRatio: 3, cacheBust: true, backgroundColor: '#0a141b' });
+      link.click();
+    }
+
+    const shareUrl = encodeURIComponent(window.location.href);
+    window.open(
+      `https://www.linkedin.com/sharing/share-offsite/?url=${shareUrl}`,
+      '_blank',
+      'noopener,noreferrer'
+    );
+  }, [postMessage, craft, shareImageDataUrl, name]);
+
+  // ── Copy Post Text ────────────────────────────────────────────────────────
+  const handleCopyPostText = async () => {
+    try {
+      await navigator.clipboard.writeText(postMessage);
+      setModalToast('Post text with hashtags copied to clipboard! ✓');
+      setTimeout(() => setModalToast(''), 3000);
+    } catch {
+      setModalToast('Failed to copy text.');
+    }
+  };
 
   // ── Copy Link ─────────────────────────────────────────────────────────────
   const handleCopyLink = () => {
@@ -306,14 +443,14 @@ export default function HHGoaGeneratorPage() {
                   type="text"
                   placeholder="Wave Hackers"
                   value={teamName}
-                  onChange={(e) => setTeamName(e.target.value)}
+                  onChange={handleTeamNameChange}
                   maxLength={30}
                 />
               </div>
 
               <div className="input-group">
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <label>TEAM ID</label>
+                  <label>TEAM ID (AUTO SERIAL)</label>
                   <button
                     onClick={handleRandomTeamId}
                     style={{
@@ -337,6 +474,11 @@ export default function HHGoaGeneratorPage() {
                 />
               </div>
             </div>
+            {teamName.trim() && (
+              <p style={{ color: 'var(--sea-teal)', fontSize: 11, fontFamily: 'Space Mono, monospace', marginTop: 4 }}>
+                ⚡ Team "{teamName}" auto-assigned serial ID: {teamId}
+              </p>
+            )}
 
             {/* PASS TYPE CHIPS */}
             <div className="input-group" style={{ marginTop: 16 }}>
@@ -388,27 +530,55 @@ export default function HHGoaGeneratorPage() {
               <span>03</span> ISSUE & SHARE
             </div>
 
-            <div className="action-row">
-              <button className="btn-share" onClick={handleShareX}>
-                SHARE TO X 𝕏
-              </button>
-              <button
-                className="btn-export"
-                onClick={() => handleDownload('png')}
-                disabled={isDownloading}
-              >
-                {isDownloading ? 'EXPORTING…' : 'PNG'}
-              </button>
-              <button
-                className="btn-export"
-                onClick={() => handleDownload('jpeg')}
-                disabled={isDownloading}
-              >
-                {isDownloading ? 'EXPORTING…' : 'JPEG'}
-              </button>
-              <button className="btn-export" onClick={handleCopyLink}>
-                {copied ? 'COPIED! ✓' : 'COPY LINK'}
-              </button>
+            <div className="action-group">
+              <div className="action-section-label">DOWNLOAD ID PASS</div>
+              <div className="action-row">
+                <button
+                  className="btn-pdf"
+                  onClick={() => handleDownload('pdf')}
+                  disabled={isDownloading}
+                  title="Download vector PDF Pass"
+                >
+                  {isDownloading ? 'EXPORTING…' : '📄 PDF ID'}
+                </button>
+                <button
+                  className="btn-export"
+                  onClick={() => handleDownload('png')}
+                  disabled={isDownloading}
+                  title="Download High-Res PNG"
+                >
+                  {isDownloading ? 'EXPORTING…' : '🖼️ PNG'}
+                </button>
+                <button
+                  className="btn-export"
+                  onClick={() => handleDownload('jpg')}
+                  disabled={isDownloading}
+                  title="Download Crisp JPG"
+                >
+                  {isDownloading ? 'EXPORTING…' : '📷 JPG'}
+                </button>
+              </div>
+
+              <div className="action-section-label" style={{ marginTop: 12 }}>SHARE PASS & CREATE SOCIAL POST</div>
+              <div className="action-row">
+                <button
+                  className="btn-share"
+                  onClick={openShareModal}
+                  title="Generate short post with hashtags & attached pass"
+                  style={{ background: 'linear-gradient(135deg, var(--sunset-coral) 0%, var(--sunset-gold) 100%)', color: '#060d1e' }}
+                >
+                  🚀 GENERATE & PREVIEW POST
+                </button>
+                <button className="btn-x" onClick={handleShareX} title="Share to X / Twitter">
+                  𝕏 SHARE TO X
+                </button>
+                <button className="btn-linkedin" onClick={handleShareLinkedIn} title="Share to LinkedIn">
+                  💼 LINKEDIN
+                </button>
+                <button className="btn-export" onClick={handleCopyLink} title="Copy Page Link">
+                  {copied ? 'COPIED! ✓' : '🔗 COPY LINK'}
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -433,8 +603,78 @@ export default function HHGoaGeneratorPage() {
       </div>
 
       <footer className="page-footer">
-        Hacker House Goa 2026 · Built for builders 🌊
+        Hacker House Goa 2026 · Built By team Liftuplabs With love ❤️
       </footer>
+
+      {/* ── SOCIAL SHARE PREVIEW MODAL ───────────────────────────────────── */}
+      {showShareModal && (
+        <div className="modal-overlay" onClick={() => setShowShareModal(false)}>
+          <div className="modal-card" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <div className="modal-title">
+                🚀 Social Post Preview & Pass Attachment
+              </div>
+              <button
+                className="modal-close-btn"
+                onClick={() => setShowShareModal(false)}
+                title="Close"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Notification Toast */}
+            {modalToast && (
+              <div className="modal-toast-notice">
+                <span>✨</span>
+                <span>{modalToast}</span>
+              </div>
+            )}
+
+            {/* Post Message Textarea */}
+            <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--sea-teal)', fontFamily: 'Space Mono, monospace', marginBottom: 6, display: 'block' }}>
+              CUSTOMIZABLE SHORT POST (WITH EVENT HASHTAGS)
+            </label>
+            <textarea
+              className="post-preview-textarea"
+              value={postMessage}
+              onChange={(e) => setPostMessage(e.target.value)}
+              placeholder="Write your share post..."
+            />
+
+            {/* Pass Image Preview Slot */}
+            <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--sunset-gold)', fontFamily: 'Space Mono, monospace', marginBottom: 6, display: 'block' }}>
+              ATTACHED BUILDER PASS (PNG)
+            </label>
+            <div className="pass-preview-slot">
+              {shareImageDataUrl ? (
+                <img
+                  src={shareImageDataUrl}
+                  alt="Builder Pass Preview"
+                  className="pass-preview-img"
+                />
+              ) : (
+                <div style={{ padding: 40, textAlign: 'center', color: 'rgba(255,255,255,0.4)' }}>
+                  Rendering pass preview...
+                </div>
+              )}
+            </div>
+
+            {/* Action buttons */}
+            <div className="action-row" style={{ justifyContent: 'flex-end', gap: 10 }}>
+              <button className="btn-x" onClick={handleShareX} title="Share post & attach image to X">
+                𝕏 Share to X
+              </button>
+              <button className="btn-linkedin" onClick={handleShareLinkedIn} title="Share post & attach image to LinkedIn">
+                💼 Share to LinkedIn
+              </button>
+              <button className="btn-export" onClick={handleCopyPostText} title="Copy post text with hashtags">
+                📋 Copy Text
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
