@@ -402,7 +402,7 @@ export default function HHGoaGeneratorPage() {
     const intentUrl = `https://www.linkedin.com/sharing/share-offsite/?url=${shareUrl}`;
 
     // Open LinkedIn tab synchronously to avoid popup blocker
-    window.open(intentUrl, '_blank', 'noopener,noreferrer');
+    let linkedInWindow = window.open(intentUrl, '_blank', 'noopener,noreferrer');
 
     try {
       const text = postMessage || `Heading to Hacker House Goa 2026 as a ${craft || 'Builder'}! 🌴🚀\n\n#FrameInGoa #HHGoa2026 #HackerHouseGoa #LiftUpLabs`;
@@ -413,22 +413,38 @@ export default function HHGoaGeneratorPage() {
         setShareImageDataUrl(dataUrl);
       }
 
-      try {
-        await navigator.clipboard.writeText(text);
-      } catch {
-        // Ignore clipboard error
-      }
-
       if (dataUrl) {
+        const response = await fetch(dataUrl);
+        const blob = await response.blob();
+
+        // 1. Copy Image PNG to Clipboard for instant Ctrl+V on LinkedIn
+        try {
+          if (navigator.clipboard && window.ClipboardItem) {
+            await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
+          } else {
+            await navigator.clipboard.writeText(text);
+          }
+        } catch {
+          // Clipboard write fallback
+        }
+
+        // 2. Download Image file as backup attachment
         const link = document.createElement('a');
         link.download = `FrameInGoa-Pass-${(name || 'Builder').replace(/\s+/g, '-')}.png`;
         link.href = dataUrl;
         link.click();
       }
 
-      setModalToast('Redirected to LinkedIn! Post text copied & image downloaded for attachment.');
+      setModalToast('Redirected to LinkedIn! Pass image copied to clipboard (press Ctrl+V on LinkedIn) 🖼️');
+      
+      if (!linkedInWindow || linkedInWindow.closed) {
+        window.open(intentUrl, '_blank', 'noopener,noreferrer');
+      }
     } catch (err) {
       console.error('LinkedIn share error:', err);
+      if (!linkedInWindow || linkedInWindow.closed) {
+        window.open(intentUrl, '_blank', 'noopener,noreferrer');
+      }
     } finally {
       finishGeneration();
     }
