@@ -20,20 +20,21 @@ No login. No signup. No backend. Works in one pass, start to finish.
 
 ```
 idcard_module/
-└── frontend/
-    ├── index.html
-    ├── vite.config.js
-    ├── package.json
-    └── src/
-        ├── main.jsx
-        ├── App.jsx
-        ├── index.css
-        ├── assets/
-        │   └── hh_goa_logo.png
-        ├── components/
-        │   └── HHGoaIdCard.jsx       ← The card renderer (900 × 500 px)
-        └── pages/
-            └── HHGoaGeneratorPage.jsx ← Upload → customise → download/share flow
+├── index.html
+├── vite.config.js
+├── vercel.json
+├── package.json
+├── public/
+└── src/
+    ├── main.jsx
+    ├── App.jsx
+    ├── index.css
+    ├── assets/
+    │   └── hh_goa_logo.png
+    ├── components/
+    │   └── HHGoaIdCard.jsx       ← The card renderer (900 × 500 px)
+    └── pages/
+        └── HHGoaGeneratorPage.jsx ← Upload → customise → download/share flow
 ```
 
 ---
@@ -41,12 +42,11 @@ idcard_module/
 ## 🚀 Getting Started
 
 ```bash
-cd frontend
 npm install
 npm run dev
 ```
 
-Open **http://localhost:5173** in your browser.
+Open **http://localhost:5174** in your browser.
 
 ---
 
@@ -61,14 +61,13 @@ Open **http://localhost:5173** in your browser.
 
 ---
 
-## 🛠️ Building for Production
+## 🛠️ Building & Deploying
 
 ```bash
-cd frontend
 npm run build
 ```
 
-Output goes to `frontend/dist/`. Deploy the contents of `dist/` to any static host (Vercel, Netlify, GitHub Pages, etc.).
+Output goes to `dist/`. Connected to **Vercel**, it automatically builds and deploys via `vercel.json`.
 
 ---
 
