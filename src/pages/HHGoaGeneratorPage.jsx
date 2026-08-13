@@ -243,19 +243,32 @@ export default function HHGoaGeneratorPage() {
     setMeta('meta[property="og:url"]', 'content', window.location.href);
   }, []);
 
-  // ── Synchronize state with URL search parameters for link previews ────────
+  // ── Clear session, storage, & URL search params on mount & page refresh ───
   useEffect(() => {
-    const params = new URLSearchParams();
-    if (name) params.set('name', name);
-    if (craft) params.set('craft', craft);
-    if (teamName) params.set('team', teamName);
-    if (teamId) params.set('teamId', teamId);
-    if (passType) params.set('pass', passType);
-    if (assignedTitle) params.set('title', assignedTitle);
+    const clearSessionData = () => {
+      try {
+        sessionStorage.clear();
+        localStorage.clear();
+      } catch {
+        // Ignore storage access errors
+      }
+    };
 
-    const newUrl = `${window.location.pathname}?${params.toString()}`;
-    window.history.replaceState(null, '', newUrl);
+    clearSessionData();
 
+    // Clean URL address bar to clean path on load/refresh so session resets
+    if (window.location.search) {
+      window.history.replaceState(null, '', window.location.pathname);
+    }
+
+    window.addEventListener('beforeunload', clearSessionData);
+    return () => {
+      window.removeEventListener('beforeunload', clearSessionData);
+    };
+  }, []);
+
+  // ── Synchronize social meta tags for link previews ────────────────────────
+  useEffect(() => {
     const displayTitle = `${name || 'Builder'}'s HH Goa 2026 Pass | #FrameInGoa`;
     const displayDesc = `Heading to Hacker House Goa 2026 as a ${craft || 'Builder'} with team ${teamName || 'Wave Hackers'}! #FrameInGoa #HHGoa2026`;
     updateSocialMetaTags(displayTitle, displayDesc, null);
@@ -371,7 +384,16 @@ export default function HHGoaGeneratorPage() {
 
   // ── Copy Link ─────────────────────────────────────────────────────────────
   const handleCopyLink = () => {
-    navigator.clipboard.writeText(window.location.href);
+    const params = new URLSearchParams();
+    if (name) params.set('name', name);
+    if (craft) params.set('craft', craft);
+    if (teamName) params.set('team', teamName);
+    if (teamId) params.set('teamId', teamId);
+    if (passType) params.set('pass', passType);
+    if (assignedTitle) params.set('title', assignedTitle);
+
+    const shareUrl = `${window.location.origin}${window.location.pathname}?${params.toString()}`;
+    navigator.clipboard.writeText(shareUrl);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
