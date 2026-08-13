@@ -1,4 +1,4 @@
-import React, { useState, useRef, useCallback } from 'react';
+import React, { useState, useRef, useCallback, useEffect } from 'react';
 import { toPng, toJpeg } from 'html-to-image';
 import { jsPDF } from 'jspdf';
 import { BuilderPassCard } from '../components/BuilderPassCard';
@@ -45,16 +45,35 @@ function generateTeamSerialId(str) {
   return `HHG-${serialNum}`;
 }
 
+/**
+ * Parses shared URL query parameters for permalink pass loading
+ */
+function getInitialParams() {
+  if (typeof window === 'undefined') return {};
+  const params = new URLSearchParams(window.location.search);
+  const teamVal = params.get('team') || 'Wave Hackers';
+  return {
+    name: params.get('name') || 'deva bokare',
+    craft: params.get('craft') || 'Full stack developer & UI/UX Designer',
+    teamName: teamVal,
+    teamId: params.get('teamId') || generateTeamSerialId(teamVal),
+    passType: params.get('pass') || 'BUILDER PASS',
+    title: params.get('title') || 'Vector Architect',
+  };
+}
+
 const PASS_TYPES = ['BUILDER PASS', 'VIP PASS', 'HACKER PASS', 'MENTOR PASS'];
 
 export default function HHGoaGeneratorPage() {
+  const initialParams = useRef(getInitialParams()).current;
+
   const [photoUrl, setPhotoUrl] = useState(null);
-  const [name, setName] = useState('deva bokare');
-  const [craft, setCraft] = useState('Full stack developer & UI/UX Designer');
-  const [teamName, setTeamName] = useState('Wave Hackers');
-  const [teamId, setTeamId] = useState(() => generateTeamSerialId('Wave Hackers'));
-  const [passType, setPassType] = useState('BUILDER PASS');
-  const [assignedTitle, setAssignedTitle] = useState('Vector Architect');
+  const [name, setName] = useState(initialParams.name);
+  const [craft, setCraft] = useState(initialParams.craft);
+  const [teamName, setTeamName] = useState(initialParams.teamName);
+  const [teamId, setTeamId] = useState(initialParams.teamId);
+  const [passType, setPassType] = useState(initialParams.passType);
+  const [assignedTitle, setAssignedTitle] = useState(initialParams.title);
 
   // Photo Position & Scale Controls
   const [scale, setScale] = useState(1);
@@ -190,6 +209,58 @@ export default function HHGoaGeneratorPage() {
     }
   }, [isDownloading, name]);
 
+  // ── Helper to update social meta tags for link previews ─────────────────
+  const updateSocialMetaTags = useCallback((title, desc, imageUrl) => {
+    const setMeta = (selector, attribute, content) => {
+      let el = document.querySelector(selector);
+      if (!el) {
+        el = document.createElement('meta');
+        if (selector.startsWith('meta[property=')) {
+          const prop = selector.replace('meta[property="', '').replace('"]', '');
+          el.setAttribute('property', prop);
+        } else if (selector.startsWith('meta[name=')) {
+          const nameAttr = selector.replace('meta[name="', '').replace('"]', '');
+          el.setAttribute('name', nameAttr);
+        }
+        document.head.appendChild(el);
+      }
+      el.setAttribute(attribute, content);
+    };
+
+    if (title) {
+      document.title = title;
+      setMeta('meta[property="og:title"]', 'content', title);
+      setMeta('meta[name="twitter:title"]', 'content', title);
+    }
+    if (desc) {
+      setMeta('meta[property="og:description"]', 'content', desc);
+      setMeta('meta[name="twitter:description"]', 'content', desc);
+    }
+    if (imageUrl) {
+      setMeta('meta[property="og:image"]', 'content', imageUrl);
+      setMeta('meta[name="twitter:image"]', 'content', imageUrl);
+    }
+    setMeta('meta[property="og:url"]', 'content', window.location.href);
+  }, []);
+
+  // ── Synchronize state with URL search parameters for link previews ────────
+  useEffect(() => {
+    const params = new URLSearchParams();
+    if (name) params.set('name', name);
+    if (craft) params.set('craft', craft);
+    if (teamName) params.set('team', teamName);
+    if (teamId) params.set('teamId', teamId);
+    if (passType) params.set('pass', passType);
+    if (assignedTitle) params.set('title', assignedTitle);
+
+    const newUrl = `${window.location.pathname}?${params.toString()}`;
+    window.history.replaceState(null, '', newUrl);
+
+    const displayTitle = `${name || 'Builder'}'s HH Goa 2026 Pass | #FrameInGoa`;
+    const displayDesc = `Heading to Hacker House Goa 2026 as a ${craft || 'Builder'} with team ${teamName || 'Wave Hackers'}! #FrameInGoa #HHGoa2026`;
+    updateSocialMetaTags(displayTitle, displayDesc, null);
+  }, [name, craft, teamName, teamId, passType, assignedTitle, updateSocialMetaTags]);
+
   // Social Post Generator & Share Modal State
   const [showShareModal, setShowShareModal] = useState(false);
   const [shareImageDataUrl, setShareImageDataUrl] = useState('');
@@ -203,7 +274,11 @@ export default function HHGoaGeneratorPage() {
       const dataUrl = await toPng(passRef.current, { pixelRatio: 3, cacheBust: true, backgroundColor: '#0a141b' });
       setShareImageDataUrl(dataUrl);
 
-      const defaultMessage = `Heading to Hacker House Goa 2026 as a ${craft || 'Builder'}! 🌴🚀\nBuilding with ${teamName || 'team'} in paradise. 🌊\n\nCheck out my official Builder Pass!\n\n#FrameInGoa #HHGoa2026 #HackerHouseGoa #LiftUpLabs #BuildInParadise`;
+      const displayTitle = `${name || 'Builder'}'s HH Goa 2026 Pass | #FrameInGoa`;
+      const displayDesc = `Heading to Hacker House Goa 2026 as a ${craft || 'Builder'} with team ${teamName || 'Wave Hackers'}! #FrameInGoa #HHGoa2026`;
+      updateSocialMetaTags(displayTitle, displayDesc, dataUrl);
+
+      const defaultMessage = `Heading to Hacker House Goa 2026 as a ${craft || 'Builder'}! 🌴🚀\nBuilding with ${teamName || 'team'} in paradise. 🌊\n\nCheck out my official Builder Pass! 👇\n\n#FrameInGoa #HHGoa2026 #HackerHouseGoa #LiftUpLabs #BuildInParadise`;
       setPostMessage(defaultMessage);
       setModalToast('');
       setShowShareModal(true);
@@ -211,7 +286,7 @@ export default function HHGoaGeneratorPage() {
       console.error('Share modal capture error:', err);
       setError('Could not generate share preview. Please try again.');
     }
-  }, [craft, teamName]);
+  }, [craft, teamName, name, updateSocialMetaTags]);
 
   // ── Share to X with Pass Image & Post Text ────────────────────────────────
   const handleShareX = useCallback(async () => {
