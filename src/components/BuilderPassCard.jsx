@@ -21,10 +21,10 @@ export const BuilderPassCard = React.forwardRef(function BuilderPassCard(
   },
   ref
 ) {
-  const displayName = name.trim() || 'Deva Bokare';
-  const displayCraft = craft.trim() || 'Full stack developer & UI/UX Designer';
+  const displayName = name.trim() || 'YOUR NAME';
+  const displayCraft = craft.trim() || 'BUILDER';
   const displayTitle = assignedTitle.trim() || 'Vector Architect';
-  const displayTeam = teamName.trim() || 'Wave Hackers';
+  const displayTeam = teamName.trim() || 'SOLO BUILDER';
   const displayTeamId = teamId.trim() || 'HHG-709';
 
   return (

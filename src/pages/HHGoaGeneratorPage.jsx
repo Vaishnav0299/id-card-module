@@ -51,12 +51,12 @@ function generateTeamSerialId(str) {
 function getInitialParams() {
   if (typeof window === 'undefined') return {};
   const params = new URLSearchParams(window.location.search);
-  const teamVal = params.get('team') || 'Wave Hackers';
+  const teamVal = params.get('team') || '';
   return {
-    name: params.get('name') || 'deva bokare',
-    craft: params.get('craft') || 'Full stack developer & UI/UX Designer',
+    name: params.get('name') || '',
+    craft: params.get('craft') || '',
     teamName: teamVal,
-    teamId: params.get('teamId') || generateTeamSerialId(teamVal),
+    teamId: params.get('teamId') || (teamVal ? generateTeamSerialId(teamVal) : 'HHG-709'),
     passType: params.get('pass') || 'BUILDER PASS',
     title: params.get('title') || 'Vector Architect',
   };
@@ -514,7 +514,7 @@ export default function HHGoaGeneratorPage() {
               <label>FULL NAME</label>
               <input
                 type="text"
-                placeholder="deva bokare"
+                placeholder="Enter your full name"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 maxLength={32}
@@ -525,7 +525,7 @@ export default function HHGoaGeneratorPage() {
               <label>CRAFT / ROLE</label>
               <input
                 type="text"
-                placeholder="Full stack developer & UI/UX Designer"
+                placeholder="e.g. Full Stack Developer / Designer"
                 value={craft}
                 onChange={(e) => setCraft(e.target.value)}
                 maxLength={45}
@@ -538,7 +538,7 @@ export default function HHGoaGeneratorPage() {
                 <label>TEAM NAME</label>
                 <input
                   type="text"
-                  placeholder="Wave Hackers"
+                  placeholder="Enter team name (Optional)"
                   value={teamName}
                   onChange={handleTeamNameChange}
                   maxLength={30}
