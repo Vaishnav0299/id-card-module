@@ -325,50 +325,69 @@ export default function HHGoaGeneratorPage() {
   const handleShareX = useCallback(async () => {
     if (isGenerating) return;
     setIsGenerating(true);
-    try {
-      const text = postMessage || `Heading to Hacker House Goa 2026 as a ${craft || 'Builder'}! 🌴🚀\n\n#FrameInGoa #HHGoa2026 #HackerHouseGoa #LiftUpLabs`;
 
+    const tweetText = postMessage || `Heading to Hacker House Goa 2026 as a ${craft || 'Builder'}! 🌴🚀\n\nCheck out my official Builder Pass! 👇\n\n#FrameInGoa #HHGoa2026 #HackerHouseGoa #LiftUpLabs`;
+    const intentUrl = `https://x.com/intent/tweet?text=${encodeURIComponent(tweetText)}`;
+
+    // Open X tab synchronously to prevent browser popup blockers
+    let xWindow = null;
+    const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+    if (!isMobile || !navigator.share) {
+      xWindow = window.open(intentUrl, '_blank', 'noopener,noreferrer');
+    }
+
+    try {
       let dataUrl = shareImageDataUrl;
       if (!dataUrl && passRef.current) {
         dataUrl = await toPng(passRef.current, FAST_EXPORT_OPTIONS);
         setShareImageDataUrl(dataUrl);
       }
 
-      // Try Web Share API with File Attachment
-      if (dataUrl && navigator.share && navigator.canShare) {
-        try {
-          const blob = await (await fetch(dataUrl)).blob();
+      if (dataUrl) {
+        const response = await fetch(dataUrl);
+        const blob = await response.blob();
+
+        // 1. Try Web Share API on mobile
+        if (navigator.share && navigator.canShare) {
           const file = new File([blob], `FrameInGoa-Pass-${(name || 'Builder').replace(/\s+/g, '-')}.png`, { type: 'image/png' });
           if (navigator.canShare({ files: [file] })) {
+            if (xWindow && !xWindow.closed) xWindow.close();
             await navigator.share({
               title: 'Hacker House Goa 2026 Builder Pass',
-              text: text,
+              text: tweetText,
               files: [file],
             });
             return;
           }
-        } catch (err) {
-          console.log('Web share fallback triggered:', err);
         }
-      }
 
-      // Desktop Fallback: Copy Post Text + Download Image + Open X
-      try {
-        await navigator.clipboard.writeText(text);
-        setModalToast('Post text copied & pass image downloaded! Paste text & attach image on X.');
-      } catch {
-        // Ignore clipboard error
-      }
+        // 2. Copy Image PNG to Clipboard for instant Ctrl+V on Desktop X
+        try {
+          if (navigator.clipboard && window.ClipboardItem) {
+            await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
+          }
+        } catch {
+          // Clipboard image write fallback
+        }
 
-      // Trigger Image Download for Attachment
-      if (dataUrl) {
+        // 3. Download Image file as backup attachment
         const link = document.createElement('a');
         link.download = `FrameInGoa-Pass-${(name || 'Builder').replace(/\s+/g, '-')}.png`;
         link.href = dataUrl;
         link.click();
       }
 
-      window.open(`https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}`, '_blank', 'noopener,noreferrer');
+      setModalToast('Redirected to X with pre-filled #FrameInGoa post! Press Ctrl+V to paste your image 🖼️');
+      
+      // Ensure tab is open if not opened yet
+      if (!xWindow || xWindow.closed) {
+        window.open(intentUrl, '_blank', 'noopener,noreferrer');
+      }
+    } catch (err) {
+      console.error('Share to X error:', err);
+      if (!xWindow || xWindow.closed) {
+        window.open(intentUrl, '_blank', 'noopener,noreferrer');
+      }
     } finally {
       finishGeneration();
     }
@@ -378,6 +397,13 @@ export default function HHGoaGeneratorPage() {
   const handleShareLinkedIn = useCallback(async () => {
     if (isGenerating) return;
     setIsGenerating(true);
+
+    const shareUrl = encodeURIComponent(window.location.href);
+    const intentUrl = `https://www.linkedin.com/sharing/share-offsite/?url=${shareUrl}`;
+
+    // Open LinkedIn tab synchronously to avoid popup blocker
+    window.open(intentUrl, '_blank', 'noopener,noreferrer');
+
     try {
       const text = postMessage || `Heading to Hacker House Goa 2026 as a ${craft || 'Builder'}! 🌴🚀\n\n#FrameInGoa #HHGoa2026 #HackerHouseGoa #LiftUpLabs`;
 
@@ -389,7 +415,6 @@ export default function HHGoaGeneratorPage() {
 
       try {
         await navigator.clipboard.writeText(text);
-        setModalToast('Post text copied & pass image downloaded! Paste text & attach image on LinkedIn.');
       } catch {
         // Ignore clipboard error
       }
@@ -401,12 +426,9 @@ export default function HHGoaGeneratorPage() {
         link.click();
       }
 
-      const shareUrl = encodeURIComponent(window.location.href);
-      window.open(
-        `https://www.linkedin.com/sharing/share-offsite/?url=${shareUrl}`,
-        '_blank',
-        'noopener,noreferrer'
-      );
+      setModalToast('Redirected to LinkedIn! Post text copied & image downloaded for attachment.');
+    } catch (err) {
+      console.error('LinkedIn share error:', err);
     } finally {
       finishGeneration();
     }
